@@ -1,6 +1,20 @@
 #![no_std]
 #![no_main]
 use core::arch::asm;
+mod uart;
+mod console;
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::console::_print(core::format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => ($crate::print!(concat!($fmt, "\n"), $($arg)*));
+}
 
 fn outw(port: u16, data: u16) {
   unsafe {
@@ -17,6 +31,8 @@ fn halt() -> ! {
 
 #[no_mangle]
 fn entryofrust() -> ! {
+  uart::uartinit();
+  println!("uart {}", 123);
   halt();
 }
 

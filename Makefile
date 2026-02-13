@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 OBJS = src/*.rs
 
 # Cross-compiling (e.g., on Mac OS X)
@@ -88,8 +89,7 @@ bootblock: bootasm.S bootmain.c
 	./sign.pl bootblock
 
 kernel.a: $(OBJS)
-	cargo rustc -Z build-std=core --target ./targets/i686-stage-3.json --lib --release -- --emit link=kernel.a
-
+	cargo rustc -Z build-std=core -Z json-target-spec --target ./targets/i686-stage-3.json --lib --release -- --emit link=kernel.a
 kernel: kernel.a entry.o kernel.ld
 	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o kernel.a -b binary
 	$(OBJDUMP) -S -D kernel > kernel.asm
