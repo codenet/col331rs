@@ -13,9 +13,9 @@ const REG_TABLE: u32 = 0x10 / 4;     // Redirection table base (0x10 / 4)
 
 // Redirection table configuration bits
 const INT_DISABLED: u32 = 0x00010000;  // Interrupt disabled
-const INT_LEVEL: u32 = 0x00008000;     // Level-triggered
-const INT_ACTIVELOW: u32 = 0x00002000; // Active low
-const INT_LOGICAL: u32 = 0x00000800;   // Destination is CPU ID
+// const INT_LEVEL: u32 = 0x00008000;     // Unused in p3 - Level-triggered
+// const INT_ACTIVELOW: u32 = 0x00002000; // Unused in p3 - Active low
+// const INT_LOGICAL: u32 = 0x00000800;   // Unused in p3 - Destination is CPU ID
 
 const T_IRQ0: u32 = 32;
 
@@ -49,7 +49,8 @@ pub fn ioapic_init() {
     }
 }
 
-fn ioapic_enable(irq: u32, cpunum: u32) {
-    ioapic_write(REG_TABLE + 2 * irq, T_IRQ0 + irq);
-    ioapic_write(REG_TABLE + 2 * irq + 1, cpunum << 24);
-}
+// Unused in p3 - needed for enabling specific interrupts in p4+
+// fn ioapic_enable(irq: u32, cpunum: u32) {
+//     ioapic_write(REG_TABLE + 2 * irq, T_IRQ0 + irq);
+//     ioapic_write(REG_TABLE + 2 * irq + 1, cpunum << 24);
+// }

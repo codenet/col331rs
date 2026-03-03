@@ -20,6 +20,8 @@ use ioapic::*;
 use picirq::*;
 use mp::*;
 
+static mut PANICKED: bool = false;
+
 #[macro_export]
 macro_rules! println {
     ($($arg:tt)*) => ({
@@ -32,7 +34,18 @@ macro_rules! println {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("Kernel Panic: {:?}", info);
+    // Disable interrupts to prevent interrupt handlers from interfering
+    cli();
+    
+    // Print panic message with LAPIC ID to identify which CPU panicked
+    println!("lapicid {}:\n{:#?}", lapicid(), info);
+    
+    // TODO: Add stack trace via getcallerpcs() once spinlock.rs is implemented
+    
+    // Set panicked flag (freeze other CPUs in full xv6)
+    unsafe { PANICKED = true; }
+    
+    // Halt the system
     loop {}
 }
 
@@ -55,6 +68,9 @@ fn entryofrust() -> ! {
     println!("pics disabled !!");
     ioapic_init();
     println!("ioapics initialized !!");
+
+    // Test panic handler
+    // panic!("Testing enhanced panic handler");
 
     halt();
 }

@@ -84,3 +84,6 @@ gdt:
 gdtdesc:
   .word   (gdtdesc - gdt - 1)             # sizeof(gdt) - 1
   .long   gdt                             # address gdt
+
+# Add .note.GNU-stack section for non-executable stack marking
+.section .note.GNU-stack,"",@progbits

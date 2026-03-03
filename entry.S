@@ -48,3 +48,6 @@ entry:
   call entryofrust
 
 .comm stack, KSTACKSIZE
+
+# Add .note.GNU-stack section for non-executable stack marking
+.section .note.GNU-stack,"",@progbits

@@ -4,7 +4,8 @@ use crate::x86::{outb, inb};
 use crate::proc::Cpu;
 use core::cell::OnceCell;
 
-pub static mut IOAPICID: u8 = 0;
+// Removed: replaced by MP_ONCE.ioapic_id OnceCell pattern
+// pub static mut IOAPICID: u8 = 0;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -59,7 +60,7 @@ pub struct MpIoApic {
 }
 
 // Processor flags
-pub const MPBOOT: u8 = 0x02;     // This proc is the bootstrap processor
+// pub const MPBOOT: u8 = 0x02;     // Unused in p3 - This proc is the bootstrap processor
 
 // Table entry types
 pub const MPPROC: u8 = 0x00;     // One per processor
@@ -194,7 +195,8 @@ pub fn mpinit() {
   let conf = unsafe { *(mp.physaddr as *mut MpConf) };
 
   let mut ismp = true;
-  MP_ONCE.lapic_base.set(conf.lapicaddr as *mut u32);
+  MP_ONCE.lapic_base.set(conf.lapicaddr as *mut u32)
+    .expect("lapic_base already initialized");
 
   let mut p = (mp.physaddr as usize + mem::size_of::<MpConf>()) as *const u8;
   let e = (mp.physaddr as usize + conf.length as usize) as *const u8;
@@ -216,7 +218,8 @@ pub fn mpinit() {
       MPIOAPIC => {
         let ioapic = p as *const MpIoApic;
         let ioapicid = unsafe { (*ioapic).apicno };
-        MP_ONCE.ioapic_id.set(ioapicid);
+        MP_ONCE.ioapic_id.set(ioapicid)
+          .expect("ioapic_id already initialized");
         p = p.wrapping_add(mem::size_of::<MpIoApic>());
       }
       MPBUS | MPIOINTR | MPLINTR => {
@@ -232,7 +235,8 @@ pub fn mpinit() {
   if !ismp {
       panic!("Didn't find a suitable machine");
   }
-  MP_ONCE.cpus.set(cpus);
+  MP_ONCE.cpus.set(cpus)
+    .expect("cpus array already initialized");
 
   if mp.imcrp != 0 {
     // Bochs doesn't support IMCR, so this doesn't run on Bochs.
