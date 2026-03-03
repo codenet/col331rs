@@ -25,49 +25,12 @@ pub fn outb(port: u16, value: u8) {
     }
 }
 
-pub fn inw(port: u16) -> u16 {
-    let result: u16;
-    unsafe { 
-        asm!(
-            "in ax, dx",
-            in("dx") port,
-            out("ax") result,
-            options(nomem, nostack)
-        );
-        result    
-    }
-}
-
 pub fn outw(port: u16, value: u16) {
     unsafe { 
         asm!(
             "out dx, ax",
             in("dx") port,
             in("ax") value,
-            options(nomem, nostack)
-        );    
-    }
-}
-
-pub fn inl(port: u16) -> u32 {
-    unsafe  { 
-        let result: u32;
-        asm!(
-            "in eax, dx",
-            in("dx") port,
-            out("eax") result,
-            options(nomem, nostack)
-        );
-        result    
-    }
-}
-
-pub fn outl(port: u16, value: u32) {
-    unsafe { 
-        asm!(
-            "out dx, eax",
-            in("dx") port,
-            in("eax") value,
             options(nomem, nostack)
         );    
     }
@@ -110,6 +73,40 @@ pub fn lidt(gdt: *const [GateDesc; 256], size: usize) {
             options(nostack, readonly)
         );
     }
+}
+
+pub fn noop() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+// x86.rs
+pub unsafe fn insl(port: u16, addr: *mut u32, cnt: usize) {
+    core::arch::asm!(
+        "cld",
+        "rep insd",
+        in("dx") port,
+        inout("edi") (addr as usize) => _,
+        inout("ecx") cnt => _,
+        options(nostack, preserves_flags),
+    );
+}
+
+
+// Output string of dwords to port using rep outsd instruction.
+// Matches the C implementation: outsl(port, addr, cnt)
+// Note: ESI must be saved/restored as LLVM restricts its use in 32-bit mode
+pub unsafe fn outsl(port: u16, addr: *const u32, cnt: usize) {
+    let addr_val = addr as u32;
+    core::arch::asm!(
+        "push esi",
+        "mov esi, {addr}",
+        "cld",
+        "rep outsd",
+        "pop esi",
+        addr = in(reg) addr_val,
+        in("dx") port,
+        inout("ecx") cnt => _,
+    );
 }
 
 /// Halts the CPU until the next interrupt occurs.

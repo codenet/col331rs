@@ -26,6 +26,7 @@ for(my $i = 0; $i < 256; $i++){
     print "  .long vector$i\n";
 }
 
+print ".section .note.GNU-stack,\"\",%progbits\n";
 # sample output:
 #   # handlers
 #   .globl alltraps

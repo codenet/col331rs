@@ -1,27 +1,22 @@
 use modular_bitfield::prelude::*;
-use core::cell::{OnceCell, RefCell};
+use core::cell::OnceCell;
+use core::sync::atomic::{AtomicU32, Ordering};
+use core::ptr::addr_of_mut;
 use crate::proc::cpuid;
 use crate::println;
 use crate::lapic::lapiceoi;
-use crate::x86::{lidt,rcr2};
+use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
-
-const SEG_KCODE: u16 = 1;
-const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
-const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
-
-pub const T_IRQ0: u32 = 32;
-pub const IRQ_TIMER: u32 = 0;
-pub const IRQ_ERROR: u32 = 19;
-pub const IRQ_SPURIOUS: u32 = 31;
+use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, SEG_KCODE, STS_IG32, STS_TG32};
+use crate::uart::uartintr;
 
 extern "C" {
-    static vectors: [usize; 256]; // remove assembly. 
+    static vectors: [usize; 256]; // in vectors.S: array of 256 entry pointers
 }
 
 #[bitfield]
 #[repr(C, packed)]
-#[derive(Clone, Copy, Default)] // debug can be removed ? do we need to ? 
+#[derive(Clone, Copy, Default)]
 pub struct GateDesc {
     off_15_0: B16,   // low 16 bits of offset in segment
     cs: B16,         // code segment selector
@@ -40,7 +35,7 @@ impl GateDesc {
         self.set_args(0);
         self.set_rsv1(0);
         let typ = if is_trap { STS_TG32 } else { STS_IG32 };
-        self.set_r_type(typ);  // for an interrupt gate, for example.
+        self.set_r_type(typ);
         self.set_s(0);
         self.set_dpl(dpl);
         self.set_p(1);
@@ -49,58 +44,27 @@ impl GateDesc {
 }
 
 
-#[repr(C)]
-pub struct IDTOnce {
-    pub idt: OnceCell<[GateDesc; 256]>,
-    pub ticks: RefCell<u32>
-}  
-unsafe impl Sync for IDTOnce {}
-pub static IDT: IDTOnce = IDTOnce { idt: OnceCell::new(),  ticks: RefCell::new(0) };
-
-
-#[repr(C)]
-pub struct TrapFrame {
-    // registers as pushed by pusha
-    pub edi: u32,
-    pub esi: u32,
-    pub ebp: u32,
-    pub oesp: u32, // useless & ignored
-    pub ebx: u32,
-    pub edx: u32,
-    pub ecx: u32,
-    pub eax: u32,
-
-    pub trapno: u32,
-
-    // below here defined by x86 hardware
-    pub err: u32,
-    pub eip: u32,
-    pub cs: u16,
-    pub padding5: u16,
-    pub eflags: u32,
-
-    // below here only when crossing rings, such as from user to kernel
-    pub esp: u32,
-    pub ss: u16,
-    pub padding6: u16,
-}
-
+static mut IDT: OnceCell<[GateDesc; 256]> = OnceCell::new();
+pub static TICKS: AtomicU32 = AtomicU32::new(0);
 
 pub fn tvinit() {
     let mut arr = [GateDesc::default(); 256];
     for i in 0..256 {
         arr[i].set_gate(
-            false,                  // Use an interrupt gate.
-            SEG_KCODE << 3,         // Code segment selector (shifted as in the C code).
-            unsafe { vectors[i] },  // Offset from the external vector table.
-            0                       // Descriptor privilege level.
+            false,
+            SEG_KCODE << 3,
+            unsafe { vectors[i] },
+            0
         );
     }
-    IDT.idt.set(arr);
+    unsafe {
+        let _ = (*addr_of_mut!(IDT)).set(arr);
+    }
 }
 
 pub fn idtinit() {
-    lidt(IDT.idt.get().unwrap() , core::mem::size_of::<[GateDesc; 256]>() as usize); 
+    let idt = unsafe { (*addr_of_mut!(IDT)).get().expect("IDT not initialized") };
+    lidt(idt, core::mem::size_of::<[GateDesc; 256]>() as usize);
 }
 
 
@@ -116,22 +80,30 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 	const TIMER: u32 = T_IRQ0 + IRQ_TIMER;
 	const SPURIOUS: u32 = T_IRQ0 + IRQ_SPURIOUS;
 	const SEVEN: u32 = T_IRQ0 + 7;
-	
+    
     match tf.trapno {
-		TIMER => {
-            *IDT.ticks.borrow_mut() += 1;
-            println!("Tick {}!", IDT.ticks.borrow());
-			lapic::lapiceoi();
-		}
-		SEVEN | SPURIOUS => {
-			println!(
-				"cpu{}: spurious interrupt at {}:{}\n",
-				cpuid() ,
-				tf.cs,
-				tf.eip
-			);
+        TIMER => {
+            TICKS.fetch_add(1, Ordering::Relaxed);
+            lapic::lapiceoi();
+        }
+        x if x == T_IRQ0 + IRQ_COM1 => {
+            uartintr();
+            lapiceoi();
+        }
+        SEVEN | SPURIOUS => {
+            println!(
+                "cpu{}: spurious interrupt at {:x}:{:x}\n",
+                cpuid(),
+                tf.cs,
+                tf.eip
+            );
             lapiceoi();
 		}
+        crate::constants::IDE_TRAP => {
+            crate::ide::ideintr();
+            crate::lapic::lapiceoi();
+        }
+
 		_ => {
 			println!(
 				"unexpected trap {} from cpu {} eip {} (cr2=0x{:x})\n",

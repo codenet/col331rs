@@ -17,3 +17,6 @@ trapret:
   popal
   addl $0x8, %esp  # trapno and errcode
   iret
+
+# Add .note.GNU-stack section for non-executable stack marking
+.section .note.GNU-stack,"",@progbits
