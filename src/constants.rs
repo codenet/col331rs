@@ -12,15 +12,53 @@ pub const SEG_UCODE: u16 = 3; // user code
 pub const SEG_UDATA: u16 = 4; // user data+stack
 pub const SEG_TSS: u16 = 5;   // this process's task state
 
+// cpu->gdt[NSEGS] holds the above segments.
+pub const NSEGS: usize = 6;
+
+// Privilege level
+pub const DPL_USER: u8 = 0x3; // User DPL
+
+// Application segment type bits
+pub const STA_X: u8 = 0x8;     // Executable segment
+pub const STA_W: u8 = 0x2;     // Writeable (non-executable segments)
+pub const STA_R: u8 = 0x2;     // Readable (executable segments)
+
+// Memory layout
+pub const EXTMEM: u32 = 0x100000;      // Start of extended memory
+pub const PHYSTART: u32 = EXTMEM + PROCSIZE;
+pub const PHYSTOP: u32 = 0xE000000;    // Top physical memory
+pub const DEVSPACE: u32 = 0xFE000000;  // Other devices are at high addresses
+
+// Key addresses for address space layout
+pub const KERNBASE: u32 = 0x0;              // First kernel virtual address
+pub const KERNLINK: u32 = KERNBASE + EXTMEM; // Address where kernel is linked
+
+// We assume that kernel.asm can fit in first 2MB
+pub const STARTPROC: u32 = 0x200000;  // Start allocating process from here (2MB)
+pub const PROCSIZE: u32 = 0x100;      // 1MB is the size of each process (in multiple of 4KB)
+
+// Page table constants
+pub const PGSIZE: u32 = PROCSIZE << 12; // Process allocation granularity in bytes
+pub const NPDENTRIES: usize = 1024;   // # directory entries per page directory
+pub const NPTENTRIES: usize = 1024;   // # PTEs per page table
+pub const PTXSHIFT: u32 = 12;         // offset of PTX in a linear address
+pub const PDXSHIFT: u32 = 22;         // offset of PDX in a linear address
+
+#[inline]
+pub const fn pgroundup(sz: usize) -> usize {
+    (sz + PGSIZE as usize - 1) & !(PGSIZE as usize - 1)
+}
+
+// Page table/directory entry flags
+pub const PTE_P: u32 = 0x001;   // Present
+pub const PTE_W: u32 = 0x002;   // Writeable
+pub const PTE_U: u32 = 0x004;   // User
+pub const PTE_PS: u32 = 0x080;  // Page Size
+
 // System segment type bits
 pub const STS_T32A: u8 = 0x9; // Available 32-bit TSS
 pub const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
 pub const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
-
-
-// ----------------------------------------------------- CPU RELATED ----------------------------------------------
-pub const KSTACKSIZE: usize = 4096; // size of per-process kernel stack
-pub const NCPU: usize = 8; // maximum number of CPUs
 
 // ----------------------------------------------- TRAPS -------------------------------------------------------
 // x86 trap and interrupt constants
@@ -50,18 +88,21 @@ pub const T_SIMDERR: u32 = 19;    // SIMD floating point error
 // Arbitrarily chosen, but with care not to overlap
 // processor defined exceptions or interrupt vectors
 pub const T_SYSCALL: u32 = 64;    // system call
+pub const SYS_OPEN: usize = 1;
+pub const SYS_WRITE: usize = 2;
+pub const SYS_CLOSE: usize = 3;
+pub const SYS_EXEC: usize = 4;
+pub const SYS_UPTIME: usize = 5;
+
 pub const T_DEFAULT: u32 = 500;   // catchall
-
-pub const T_IRQ0: u32 = 32;       // IRQ 0 corresponds to int T_IRQ
-
+pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
 pub const IRQ_KBD: u32 = 1;
 pub const IRQ_COM1: u32 = 4;
 pub const IRQ_IDE: u32 = 14;
 pub const IRQ_ERROR: u32 = 19;
 pub const IRQ_SPURIOUS: u32 = 31;
-
-
+pub const IDE_TRAP: u32 = T_IRQ0 + IRQ_IDE;
 // ------------------------------------------------------ MP RELATED  -------------------------------------------------------
 
 // Processor flags
@@ -117,3 +158,51 @@ pub const PERIODIC: u32 = 0x00020000;  // Periodic
 
 // Error handling
 pub const MASKED: u32 = 0x00010000;   // Interrupt masked
+
+// ------------------------------------------------------ FILE SYSTEM (fs.h) ----------------------------------------------
+// On-disk file system format constants
+// Both the kernel and user programs (mkfs) use these definitions
+
+pub const ROOTINO: u32 = 1;           // root i-number
+pub const BSIZE: usize = 512;         // block size
+
+// File structure
+pub const NDIRECT: usize = 12;        // number of direct block pointers
+pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();  // number of indirect block pointers (BSIZE / sizeof(uint))
+pub const MAXFILE: usize = NDIRECT + NINDIRECT;  // max file size in blocks
+
+// Directory entry
+pub const DIRSIZ: usize = 14;         // directory name length
+pub const DIRENT_SIZE: usize = 2 + DIRSIZ; // sizeof(struct dirent) = 2 bytes for uint16_t + 14 bytes for name
+
+// Inode calculations
+// Note: In C these are macros. IPB = (BSIZE / sizeof(struct dinode))
+// For Rust: sizeof(dinode) = 2+2+2+2+4+(13*4) = 64 bytes
+// So IPB = 512/64 = 8 inodes per block
+pub const DINODE_SIZE: usize = 64;    // sizeof(struct dinode)
+pub const IPB: usize = BSIZE / DINODE_SIZE;  // inodes per block
+
+// Bitmap calculations
+pub const BPB: usize = BSIZE * 8;     // bitmap bits per block
+
+// ------------------------------------------------------ SYSTEM PARAMETERS (param.h) ----------------------------------------------
+// System-wide parameters
+pub const MAXOPBLOCKS: usize = 10;  // max # of blocks any FS op writes
+pub const NBUF: usize = MAXOPBLOCKS * 3;  // size of disk block cache
+pub const FSSIZE: u32 = 1000;        // size of file system in blocks (C version: 1000, extended: 10000)
+pub const NINODES: u32 = 200;         // number of inodes in file system
+
+// ------------------------------------------------------ FILE TYPES (stat.h) ----------------------------------------------
+// File type constants for inode.type field
+
+pub const T_DIR: u16 = 1;             // Directory
+pub const T_FILE: u16 = 2;            // File
+pub const T_DEV: u16 = 3;             // Device
+
+// ------------------------------------------------------ ELF CONSTANTS (elf.h) ----------------------------------------------
+
+pub const ELF_MAGIC:           u32 = 0x464C457F; // "\x7FELF" in little endian'
+pub const ELF_PROG_LOAD:       u32 = 1;          // Loadable program segment
+pub const ELF_PROG_FLAG_EXEC:  u32 = 0x1;        // Executable segment
+pub const ELF_PROG_FLAG_WRITE: u32 = 0x2;        // Write
+pub const ELF_PROG_FLAG_READ:  u32 = 0x4;        // Read

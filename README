@@ -1,5 +1,0 @@
-For the COL331 course
-
-
-1. The next step to make things look good is to remove perl script , and that may be done using a separate linker script. 
-2. Or may be use inclbin inside assembly.
