@@ -1,7 +1,13 @@
+[workspace]
+members = [
+    ".",        # kernel crate
+    "user"      # user programs crate
+]
 [package]
 name = "xv6"
 version = "0.1.0"
 edition = "2021"
+autobins = false
 
 [lib]
 name = "kernel"
@@ -13,6 +19,7 @@ modular-bitfield = "0.11.2"
 
 [profile.release]
 panic="abort"
+debug = true
 opt-level = "s"    # Optimize for size
 codegen-units = 1  # Fewer units for better cross-function inlining
-lto = true         # Link-time optimization
+lto = true        # Disabled Link-time optimization
