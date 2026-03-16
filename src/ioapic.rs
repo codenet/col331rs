@@ -1,7 +1,7 @@
 use core::ptr::{read_volatile, write_volatile};
 use crate::mp::MP_ONCE;
-use crate::console::Console;
-use core::fmt::Write;
+// use crate::console::Console;
+// use core::fmt::Write;
 use crate::println;
 
 // I/O APIC default physical address
@@ -14,9 +14,9 @@ const REG_TABLE: u32 = 0x10;     // Redirection table base (0x10 / 4)
 
 // Redirection table configuration bits
 const INT_DISABLED: u32 = 0x00010000;  // Interrupt disabled
-const INT_LEVEL: u32 = 0x00008000;     // Level-triggered
-const INT_ACTIVELOW: u32 = 0x00002000; // Active low
-const INT_LOGICAL: u32 = 0x00000800;   // Destination is CPU ID
+// const INT_LEVEL: u32 = 0x00008000;     // Unused in p3 - Level-triggered
+// const INT_ACTIVELOW: u32 = 0x00002000; // Unused in p3 - Active low
+// const INT_LOGICAL: u32 = 0x00000800;   // Unused in p3 - Destination is CPU ID
 
 pub const T_IRQ0: u32 = 32;
 
