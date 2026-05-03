@@ -38,14 +38,11 @@ const TICR: isize = 0x0380 / 4;
 const TCCR: isize = 0x0390 / 4;
 const TDCR: isize = 0x03E0 / 4;
 
-// Volatile write to LAPIC
 fn lapicw(index: isize, value: u32) {
-	// lapic_base is a global address so multiple threads can write to it. 
-	// most likely multiple cpus can't as they will write to their own lapic.
-	// but we dont have AP processors running nor we have multiple threads. 
+	// lapic_base is a global address. Multiple cpus will write to their own
+	// lapic. We dont have AP processors running nor we have multiple threads.
 	let b = MP_ONCE.lapic_base.get().unwrap();
 	unsafe {
-		// unsafe because write_volatile itself is unsafe. 
 		write_volatile(b.offset(index), value);
 	}
 }
