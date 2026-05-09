@@ -6,7 +6,7 @@ mod uart;
 mod console;
 
 use core::panic::PanicInfo;
-
+use core::fmt::Write;
 use uart::*;
 use x86::*;
 use console::*;
