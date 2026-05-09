@@ -7,7 +7,7 @@ OBJS = src/*.rs
 # Using native tools (e.g., on X86 Linux)
 #TOOLPREFIX = 
 
-MAC_CCFLAGS := $(shell if [[ "$(shell uname -s)" == "Darwin" && "$(shell uname -m)" == "arm64" ]]; then \
+MAC_CCFLAGS := $(shell if [ "$(shell uname -s)" = "Darwin" ] && [ "$(shell uname -m)" = "arm64" ]; then \
 	echo "-Wno-error=infinite-recursion -Wno-error=array-bounds"; \
 	else \
 	echo ""; \
