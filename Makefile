@@ -7,7 +7,7 @@ OBJS = src/*.rs
 # Using native tools (e.g., on X86 Linux)
 #TOOLPREFIX = 
 
-MAC_CCFLAGS := $(shell if [[ "$(shell uname -s)" == "Darwin" && "$(shell uname -m)" == "arm64" ]]; then \
+MAC_CCFLAGS := $(shell if [ "$(shell uname -s)" = "Darwin" ] && [ "$(shell uname -m)" = "arm64" ]; then \
 	echo "-Wno-error=infinite-recursion -Wno-error=array-bounds"; \
 	else \
 	echo ""; \
@@ -79,13 +79,12 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
-bootblock: bootasm.S bootmain.c
+bootblock: bootasm.S bootmain.c linkers/bootblock.ld
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o bootblock.o bootasm.o bootmain.o
+	$(LD) $(LDFLAGS) -T linkers/bootblock.ld -o bootblock.o bootasm.o bootmain.o
 	$(OBJDUMP) -S -D bootblock.o > bootblock.asm
-	$(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
-	./sign.pl bootblock
+	$(OBJCOPY) -S -O binary bootblock.o bootblock
 
 kernel.a: $(OBJS)
 	cargo rustc -Z build-std=core -Z build-std-features=compiler-builtins-mem --target ./targets/i686-stage-3.json --lib --release -- --emit link=kernel.a

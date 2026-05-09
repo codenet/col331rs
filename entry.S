@@ -48,3 +48,5 @@ entry:
   call entryofrust
 
 .comm stack, KSTACKSIZE
+
+.section .note.GNU-stack,"",@progbits
