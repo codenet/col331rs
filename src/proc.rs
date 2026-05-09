@@ -3,7 +3,7 @@ use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::fs::namei;
 use crate::mmu::{SegDesc, TaskState};
 use crate::println;
-use crate::param::{KSTACKSIZE, NPROC};
+use crate::param::{KSTACKSIZE, NPROC, NOFILE};
 use crate::x86::{TrapFrame, sti};
 use crate::kalloc::kalloc;
 use core::ptr::null_mut;
@@ -29,6 +29,7 @@ pub struct Context {
     pub eip: u32,
 }
 
+#[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcState {
     Unused,
@@ -41,6 +42,7 @@ pub enum ProcState {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Proc {
+    pub sz: u32,                      // Size of process memory (bytes)
     pub offset: *mut u8,              // Process memory base
     pub kstack: *mut u8,              // Bottom of kernel stack for this process (unused for now)
     pub state: ProcState,             // Process state
@@ -48,6 +50,7 @@ pub struct Proc {
     pub parent: *mut Proc,            // Parent process
     pub tf: *mut TrapFrame,           // Trap frame for current syscall
     pub context: *mut Context,        // swtch() here to run process
+    pub ofile: [Option<usize>; NOFILE], // Open files
     pub cwd: usize,                   // Current directory (inode number)
     pub name: [u8; 16],               // Process name (debugging)
 }
@@ -55,6 +58,7 @@ pub struct Proc {
 impl Proc {
     pub const fn new() -> Self {
         Self {
+            sz: 0,
             offset: null_mut(),
             kstack: null_mut(),
             state: ProcState::Unused,
@@ -62,6 +66,7 @@ impl Proc {
             parent: null_mut(),
             tf: null_mut(),
             context: null_mut(),
+            ofile: [None; NOFILE],
             cwd: 0,
             name: [0; 16],
         }
@@ -79,6 +84,7 @@ static mut PTABLE: PTable = PTable {
 
 static mut NEXTPID: i32 = 1;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu {
     pub apicid: u8,                   // Local APIC ID
@@ -86,7 +92,7 @@ pub struct Cpu {
     pub ts: TaskState,                // Used by x86 to find stack for interrupt
     pub gdt: [SegDesc; NSEGS],        // x86 global descriptor table
     pub ncli: i32,                    // Depth of pushcli nesting.
-    pub intena: bool,                 // Were interrupts enabled before pushcli?
+    pub intena: i32,                  // Were interrupts enabled before pushcli?
     pub proc: *mut Proc,              // The process running on this cpu or null
 }
 
@@ -98,7 +104,7 @@ impl Cpu {
             ts: TaskState::new(),
             gdt: [SegDesc::new(); NSEGS],
             ncli: 0,
-            intena: false,
+            intena: 0,
             proc: null_mut(),
         }
     }
@@ -150,23 +156,23 @@ fn allocproc() -> Option<&'static mut Proc> {
                     p.state = ProcState::Unused;
                     return None;
                 }
+                p.sz = PGSIZE - KSTACKSIZE as u32;
+                p.ofile = [None; NOFILE];
                 
                 // Calculate stack pointer at the end of process memory
-                let sp = p.offset.add(PGSIZE as usize);
+                let mut sp = p.offset.add(PGSIZE as usize);
+
                 p.kstack = sp.sub(KSTACKSIZE);
-                
-                // Leave room for trap frame
-                let sp = sp.sub(core::mem::size_of::<TrapFrame>());
+
+                sp = sp.sub(core::mem::size_of::<TrapFrame>());
                 p.tf = sp as *mut TrapFrame;
-                
-                // Leave room for context
-                let sp = sp.sub(core::mem::size_of::<Context>());
+
+                sp = sp.sub(core::mem::size_of::<Context>());
                 p.context = sp as *mut Context;
                 
                 // Initialize context
                 core::ptr::write_bytes(p.context, 0, 1);
                 (*p.context).eip = trapret as *const () as usize as u32;
-                
                 return Some(p);
             }
         }
@@ -182,9 +188,8 @@ pub fn pinit() {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: u8;
         }
-        
         let p = allocproc().expect("Failed to allocate first process");
-        
+        println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
@@ -199,7 +204,7 @@ pub fn pinit() {
         (*p.tf).es = (*p.tf).ds;
         (*p.tf).ss = (*p.tf).ds;
         (*p.tf).eflags = FL_IF;
-        (*p.tf).esp = PGSIZE;
+        (*p.tf).esp = PGSIZE - KSTACKSIZE as u32;
         (*p.tf).eip = 0; // beginning of initcode.S
         
         // Set process name
@@ -264,11 +269,11 @@ fn sched() {
         panic!("sched interruptible");
     }
 
-    let intena = c.intena;
+    let intena = c.intena != 0;
     unsafe {
         swtch(&mut p.context as *mut *mut Context, c.scheduler);
     }
-    c.intena = intena;
+    c.intena = intena as i32;
 }
 
 pub fn r#yield() {

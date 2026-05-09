@@ -89,6 +89,20 @@ pub fn filealloc() -> Option<usize> {
     None
 }
 
+pub fn file_set_inode(f_idx: usize, ip: usize, omode: i32) {
+    unsafe {
+        if f_idx >= NFILE {
+            panic!("file_set_inode: bad file index");
+        }
+        let f = &mut FTABLE.file[f_idx];
+        f.type_ = FileType::Inode;
+        f.ip = ip;
+        f.off = 0;
+        f.readable = (omode & O_WRONLY) == 0;
+        f.writable = (omode & O_WRONLY) != 0 || (omode & O_RDWR) != 0;
+    }
+}
+
 pub fn filedup(f_idx: usize) -> usize {
     unsafe {
         if f_idx >= NFILE {

@@ -25,6 +25,8 @@ mod fs;
 mod fcntl;
 mod file;
 mod log;
+mod syscall;
+mod sysfile;
 mod mmu;
 mod vm;
 mod spinlock;

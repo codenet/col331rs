@@ -41,7 +41,7 @@ pub fn pushcli() {
     cli();
     let c = mycpu();
     if c.ncli == 0 {
-        c.intena = (eflags & FL_IF) != 0;
+        c.intena = ((eflags & FL_IF) != 0) as i32;
     }
     c.ncli += 1;
 }
@@ -55,7 +55,7 @@ pub fn popcli() {
     if c.ncli < 0 {
         panic!("popcli");
     }
-    if c.ncli == 0 && c.intena {
+    if c.ncli == 0 && c.intena != 0 {
         sti();
     }
 }

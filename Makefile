@@ -114,7 +114,7 @@ vectors.S: vectors.pl
 
 clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img mkfs .gdbinit vectors.S
+	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img mkfs .gdbinit vectors.S initcode initcode.out
 	cargo clean
 
 GDBPORT = $(shell expr `id -u` % 5000 + 25000)
