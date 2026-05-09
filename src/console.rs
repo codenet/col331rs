@@ -1,6 +1,9 @@
 use crate::uart::*;
 use core::fmt::*;
 
+// Console output.
+// Output is written to the screen and serial port.
+
 pub struct Console {}
 impl Write for Console {
     fn write_str(&mut self, s: &str) -> Result {
