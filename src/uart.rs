@@ -1,5 +1,9 @@
-use crate::x86::*;
+use crate::x86::{outb, inb};
+use core::sync::atomic::{AtomicBool, Ordering};
+
 const COM1: u16 = 0x3F8; // COM1 port address
+
+static UART: AtomicBool = AtomicBool::new(false);
 
 pub fn uartinit() {
   // Turn off the FIFO
@@ -18,6 +22,7 @@ pub fn uartinit() {
   if inb(COM1+5) == 0xFF {
     return;
   }
+    UART.store(true, Ordering::Relaxed);
 
   // Announce that we're here.
   for p in "xv6...\n".chars() {
@@ -26,6 +31,9 @@ pub fn uartinit() {
 }
 
 pub fn uartputc(c: char) {
+    if !UART.load(Ordering::Relaxed) {
+        return;
+    }
   for _ in 0..128  {
     if inb(COM1+5) & 0x20 != 0 {
       break;

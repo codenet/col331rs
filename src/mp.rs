@@ -141,7 +141,7 @@ fn mpsearch() -> Option<*mut Mp> {
   } else {
       let p = unsafe {(((*bda.add(0x14) as u32) << 8) | (*bda.add(0x13) as u32)) * 1024};
       mp = mpsearch1(p - 1024, 1024);
-      if !mp.is_some() {
+      if mp.is_some() {
           return mp;
       }
   }
